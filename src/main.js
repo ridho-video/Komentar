@@ -329,6 +329,23 @@ function parseUsername(raw) {
   return /^[A-Za-z0-9._]{1,40}$/.test(s) ? s : null;
 }
 
+// Ambil angka pertama yang valid (>0) dari beberapa kemungkinan nama field.
+// Library TikTok kadang mengganti nama field antar versi, jadi kita terima beberapa nama.
+const pickNum = (o, keys) => {
+  if (!o || typeof o !== 'object') return null;
+  for (const k of keys) {
+    const n = Number(o[k]);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+};
+
+// Catat nama field asli dari TikTok (sekali per jenis event) untuk petunjuk diagnosis.
+const seenKeys = {};
+function peek(name, d) {
+  if (!seenKeys[name] && d && typeof d === 'object') seenKeys[name] = Object.keys(d).slice(0, 16).join(',');
+}
+
 function stopWatch() {
   clearInterval(watchTimer);
   watchTimer = null;
@@ -339,12 +356,19 @@ function startWatch(user) {
   stopWatch();
   liveSince = Date.now();
   eventCount = 0;
+  for (const k of Object.keys(seenKeys)) delete seenKeys[k];
   watchTimer = setInterval(() => {
     if (lastStatus.state !== 'live') return;
     if (eventCount === 0 && Date.now() - liveSince > 25000) {
       sendStatus('live', `Terhubung ke @${user}, tapi TikTok belum mengirim data. Pastikan LIVE sedang berjalan & publik, atau isi API key di ⚙.`);
     } else {
-      sendStatus('live', `Terhubung ke @${user} · ${eventCount} event diterima`);
+      let text = `Terhubung ke @${user} · ${eventCount} event diterima`;
+      const missing = stats.viewers === null || !stats.likes;
+      if (missing && Date.now() - liveSince > 20000) {
+        const parts = Object.entries(seenKeys).map(([k, v]) => `${k}[${v}]`);
+        if (parts.length) text += ` · field: ${parts.join(' ')}`;
+      }
+      sendStatus('live', text);
     }
   }, 5000);
 }
@@ -411,11 +435,13 @@ function handleFail(err) {
 // Isi awal penonton & like dari data ruangan saat baru terhubung (sebelum event pertama datang).
 function applyRoomInfo(info) {
   if (!info || typeof info !== 'object') return;
-  const st = info.stats && typeof info.stats === 'object' ? info.stats : {};
-  const v = Number(info.user_count ?? info.userCount ?? st.user_count ?? st.total_user);
-  const l = Number(st.like_count ?? st.likeCount ?? info.like_count);
-  if (stats.viewers === null && Number.isFinite(v) && v > 0) { stats.viewers = v; statsDirty = true; }
-  if (stats.likes === null && Number.isFinite(l) && l > 0) { stats.likes = l; statsDirty = true; }
+  peek('roomInfo', info);
+  const inner = info.data && typeof info.data === 'object' ? info.data : info;
+  const st = inner.stats && typeof inner.stats === 'object' ? inner.stats : {};
+  const v = pickNum(inner, ['user_count', 'userCount', 'viewerCount']) ?? pickNum(st, ['user_count', 'total_user', 'userCount']);
+  const l = pickNum(st, ['like_count', 'likeCount']) ?? pickNum(inner, ['like_count', 'likeCount']);
+  if (stats.viewers === null && v !== null) { stats.viewers = v; statsDirty = true; }
+  if (!stats.likes && l !== null) { stats.likes = l; statsDirty = true; }
   if (statsDirty) kick();
 }
 
@@ -440,17 +466,19 @@ function wire(c, my) {
   });
 
   on(E.LIKE, (d) => {
-    const total = Number(d?.totalLikeCount);
-    const add = Number(d?.likeCount) || 0;
-    stats.likes = total > 0 ? total : (stats.likes || 0) + add;
+    peek('like', d);
+    const total = pickNum(d, ['totalLikeCount', 'totalLikes', 'total', 'likesTotal']);
+    const add = pickNum(d, ['likeCount', 'count', 'likes']) || 0;
+    stats.likes = total !== null ? total : (stats.likes || 0) + add;
     statsDirty = true;
     kick();
   });
 
   on(E.ROOM_USER, (d) => {
-    const v = Number(d?.viewerCount);
-    if (Number.isFinite(v)) stats.viewers = v;
-    const ranks = Array.isArray(d?.ranksList) ? d.ranksList : [];
+    peek('roomUser', d);
+    const v = pickNum(d, ['viewerCount', 'total', 'userCount', 'onlineCount']);
+    if (v !== null) stats.viewers = v;
+    const ranks = Array.isArray(d?.ranksList) ? d.ranksList : Array.isArray(d?.topViewers) ? d.topViewers : [];
     stats.top = ranks.slice(0, 3).map((r) => ({ n: nick(r?.user), c: Number(r?.coinCount) || 0 }));
     statsDirty = true;
     kick();
