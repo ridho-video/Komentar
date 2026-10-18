@@ -319,6 +319,8 @@ let fieldMiss = false; // ada event (chat/gift/follow/share) yang field pentingn
 let eventCount = 0; // jumlah event yang benar-benar diterima dari TikTok (untuk diagnosis)
 let liveSince = 0;
 let watchTimer = null;
+let infoTimer = null; // cadangan: ambil data ruangan berkala (like/penonton)
+let infoFirstTimer = null;
 
 const RETRY_LADDER = [5000, 10000, 20000, 40000, 80000, 120000];
 
@@ -349,7 +351,11 @@ function peek(name, d) {
 
 function stopWatch() {
   clearInterval(watchTimer);
+  clearInterval(infoTimer);
+  clearTimeout(infoFirstTimer);
   watchTimer = null;
+  infoTimer = null;
+  infoFirstTimer = null;
 }
 
 // Tiap 5 dtk, tampilkan jumlah event yang diterima. Kalau lama tidak ada data, beri petunjuk.
@@ -436,13 +442,25 @@ function handleFail(err) {
 function applyRoomInfo(info) {
   if (!info || typeof info !== 'object') return;
   peek('roomInfo', info);
-  const inner = info.data && typeof info.data === 'object' ? info.data : info;
+  const d1 = info.data && typeof info.data === 'object' ? info.data : info;
+  const inner = d1.data && typeof d1.data === 'object' ? d1.data : d1;
   const st = inner.stats && typeof inner.stats === 'object' ? inner.stats : {};
   const v = pickNum(inner, ['user_count', 'userCount', 'viewerCount']) ?? pickNum(st, ['user_count', 'total_user', 'userCount']);
   const l = pickNum(st, ['like_count', 'likeCount']) ?? pickNum(inner, ['like_count', 'likeCount']);
   if (stats.viewers === null && v !== null) { stats.viewers = v; statsDirty = true; }
-  if (!stats.likes && l !== null) { stats.likes = l; statsDirty = true; }
+  if (l !== null && l > (stats.likes || 0)) { stats.likes = l; statsDirty = true; } // like hanya boleh naik
   if (statsDirty) kick();
+}
+
+// Cadangan: TikTok sering tidak mengirim event like di LIVE sepi, jadi ambil total like dari data ruangan.
+async function pollRoomInfo(c, my) {
+  if (my !== session || c !== conn || !wantConnected) return;
+  if (typeof c.fetchRoomInfo !== 'function') return;
+  try {
+    const info = await c.fetchRoomInfo();
+    if (my !== session || c !== conn) return;
+    applyRoomInfo(info);
+  } catch { /* hanya cadangan: abaikan kalau gagal */ }
 }
 
 function wire(c, my) {
@@ -567,6 +585,8 @@ async function connectNow() {
     sendStatus('live', `Terhubung ke @${user}`);
     applyRoomInfo(state?.roomInfo);
     startWatch(user);
+    infoFirstTimer = setTimeout(() => pollRoomInfo(c, my), 6000);
+    infoTimer = setInterval(() => pollRoomInfo(c, my), 45000);
   } catch (err) {
     if (my !== session) return;
     handleFail(err);
