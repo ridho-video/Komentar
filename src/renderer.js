@@ -21,6 +21,7 @@ const TITLE_NORMAL = 'TikTok Live';
 const TITLE_GHOST = '🖱 Klik-tembus aktif · Ctrl+Shift+X';
 
 let cfg = {};
+TTS.init(() => cfg); // TTS selalu membaca pengaturan terbaru dari cfg
 let maxLines = 35;
 let active = false; // sedang menghubungkan / terhubung / demo
 const giftRows = new Map(); // key -> { node, until }
@@ -139,6 +140,7 @@ function showJoin(j) {
 /* ---------- reset ---------- */
 
 function clearAll() {
+  TTS.stop(); // sambung/putus/demo baru: buang antrean suara lama
   chat.replaceChildren();
   giftsBox.replaceChildren();
   giftRows.clear();
@@ -191,6 +193,10 @@ function applyLocal(key, value) {
     document.body.classList.toggle('ghost', !!value);
     title.textContent = value ? TITLE_GHOST : TITLE_NORMAL;
   }
+  else if (key === 'ttsEngine') { settingsBox.dataset.engine = value; TTS.resetFail(); }
+  else if (key === 'ttsLang') TTS.resetFail();
+  else if (key === 'ttsEnabled') { if (!value) TTS.stop(); }
+  else if (key === 'ttsVolume' || key === 'ttsRate') TTS.refresh(); // berlaku langsung ke suara yang sedang diputar
 }
 
 function syncControls() {
@@ -237,6 +243,33 @@ $('bClose').addEventListener('click', () => window.api.close());
 $('bRestart').addEventListener('click', () => window.api.relaunch());
 $('bDemo').addEventListener('click', () => { settingsBox.classList.remove('on'); window.api.demo(); });
 
+/* ---------- suara komentar (TTS) ---------- */
+
+// Isi pilihan "Suara Windows" dari suara yang terpasang. Daftar bisa terlambat muncul, jadi isi ulang saat berubah.
+function fillVoices() {
+  const sel = $('ttsVoice');
+  const frag = document.createDocumentFragment();
+  const auto = document.createElement('option');
+  auto.value = '';
+  auto.textContent = 'Otomatis (ikut bahasa)';
+  frag.append(auto);
+  for (const v of TTS.listVoices()) {
+    const o = document.createElement('option');
+    o.value = v.name;
+    o.textContent = `${v.name} (${v.lang})`;
+    frag.append(o);
+  }
+  sel.replaceChildren(frag);
+  sel.value = cfg.ttsVoice || '';
+  if (sel.value !== (cfg.ttsVoice || '')) sel.value = ''; // suara tersimpan sudah tidak ada
+}
+
+if (window.speechSynthesis) window.speechSynthesis.addEventListener('voiceschanged', fillVoices);
+
+$('bTtsTest').addEventListener('click', () => TTS.test());
+$('bTtsSkip').addEventListener('click', () => TTS.skip());
+$('bTtsClear').addEventListener('click', () => TTS.stop());
+
 /* ---------- ubah ukuran lewat pegangan pojok ---------- */
 
 (() => {
@@ -270,6 +303,7 @@ window.api.onBatch((b) => {
   if (b.s) applyStats(b.s);
   if (b.g) applyGifts(b.g);
   if (b.c || b.f) appendChat(b.c, b.f);
+  if (b.c) TTS.enqueue(b.c);
   if (b.j) showJoin(b.j);
 });
 window.api.onStatus(applyStatus);
@@ -286,8 +320,9 @@ bindControls();
 window.api.init().then((res) => {
   if (!res) return;
   cfg = res.settings;
-  for (const k of ['bgAlpha', 'fontSize', 'maxLines', 'alwaysOnTop', 'clickThrough']) applyLocal(k, cfg[k]);
+  for (const k of ['bgAlpha', 'fontSize', 'maxLines', 'alwaysOnTop', 'clickThrough', 'ttsEngine']) applyLocal(k, cfg[k]);
   userInput.value = cfg.username || '';
+  fillVoices();
   syncControls();
   applyStatus(res.status);
 });

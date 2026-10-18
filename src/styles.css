@@ -166,13 +166,16 @@ html, body {
 #settings .col { display: block; margin: 8px 0; }
 #settings .col span { display: block; margin-bottom: 3px; font-size: .9em; opacity: .85; }
 #settings input[type=range] { width: 100%; }
-#settings input[type=password] {
+#settings input[type=password], #settings input[type=text], #settings select {
   width: 100%; padding: 4px 8px; border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, .18);
   background: rgba(255, 255, 255, .06); color: #fff; font: inherit;
   user-select: text; -webkit-user-select: text;
 }
-#settings .btns { display: flex; gap: 4px; }
+#settings select option { background: #1b1b24; color: #fff; }
+#settings .sec { margin: 12px 0 2px; font-weight: 700; font-size: .95em; color: #ffd36b; }
+#settings[data-engine="google"] .sysOnly { display: none; } /* pilihan suara Windows hanya muncul saat sumber = Windows */
+#settings .btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 #settings .btns button { background: #3a3a46; }
 #settings .hint { margin-top: 10px; font-size: .8em; opacity: .6; }
 #restartNote { display: none; margin: 8px 0; padding: 6px 8px; border-radius: 6px; background: rgba(242, 176, 30, .16); font-size: .88em; }

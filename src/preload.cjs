@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   connect: (user) => ipcRenderer.invoke('connect', user),
   disconnect: () => ipcRenderer.invoke('disconnect'),
   demo: () => ipcRenderer.invoke('demo'),
+  ttsFetch: (text, lang) => ipcRenderer.invoke('tts:fetch', text, lang),
   set: (patch) => ipcRenderer.send('settings:set', patch),
   preset: (name) => ipcRenderer.send('win:preset', name),
   resizeTo: (w, h) => ipcRenderer.send('win:resize', w, h),

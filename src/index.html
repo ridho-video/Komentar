@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; media-src blob:">
   <title>TikTok Live Overlay Lite</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -42,7 +42,7 @@
 
     <div id="grip" title="Tarik untuk ubah ukuran"></div>
 
-    <aside id="settings">
+    <aside id="settings" data-engine="google">
       <div class="row"><span>Ukuran</span>
         <span class="btns">
           <button data-preset="small">Kecil</button>
@@ -57,6 +57,62 @@
       <label class="col"><span>Maks. baris komentar (lebih sedikit = lebih ringan)</span>
         <input type="range" min="10" max="80" step="5" data-k="maxLines"></label>
 
+      <p class="sec">🔊 Suara komentar (TTS)</p>
+      <label class="row"><span>Bacakan komentar</span><input type="checkbox" data-k="ttsEnabled"></label>
+      <label class="col"><span>Sumber suara</span>
+        <select data-k="ttsEngine">
+          <option value="google">Google (pilih bahasa, butuh internet)</option>
+          <option value="system">Suara Windows (offline)</option>
+        </select></label>
+      <label class="col"><span>Bahasa / negara</span>
+        <select data-k="ttsLang">
+          <option value="id">Indonesia</option>
+          <option value="ms">Malaysia (Melayu)</option>
+          <option value="jw">Jawa</option>
+          <option value="su">Sunda</option>
+          <option value="tl">Filipina</option>
+          <option value="en">Inggris</option>
+          <option value="th">Thailand</option>
+          <option value="vi">Vietnam</option>
+          <option value="ja">Jepang</option>
+          <option value="ko">Korea</option>
+          <option value="zh-CN">Mandarin</option>
+          <option value="ar">Arab</option>
+          <option value="hi">Hindi</option>
+          <option value="es">Spanyol</option>
+          <option value="pt">Portugis</option>
+          <option value="fr">Prancis</option>
+          <option value="de">Jerman</option>
+          <option value="ru">Rusia</option>
+          <option value="tr">Turki</option>
+          <option value="nl">Belanda</option>
+          <option value="it">Italia</option>
+        </select></label>
+      <label class="col sysOnly"><span>Suara Windows</span>
+        <select id="ttsVoice" data-k="ttsVoice">
+          <option value="">Otomatis (ikut bahasa)</option>
+        </select></label>
+      <label class="col"><span>Volume</span>
+        <input type="range" min="0" max="1" step="0.05" data-k="ttsVolume"></label>
+      <label class="col"><span>Kecepatan</span>
+        <input type="range" min="0.7" max="1.6" step="0.1" data-k="ttsRate"></label>
+      <label class="row"><span>Sebut nama pengirim</span><input type="checkbox" data-k="ttsReadName"></label>
+      <label class="col"><span>Maks. antrean suara (lebih kecil = lebih real-time)</span>
+        <input type="range" min="1" max="15" step="1" data-k="ttsMaxQueue"></label>
+      <label class="col"><span>Maks. panjang komentar yang dibaca</span>
+        <input type="range" min="30" max="160" step="10" data-k="ttsMaxChars"></label>
+      <label class="col"><span>Kata diblokir (pisahkan dengan koma)</span>
+        <input type="text" data-k="ttsBlock" placeholder="contoh: judi, slot" maxlength="300" spellcheck="false"></label>
+      <div class="row"><span>Tes &amp; kontrol</span>
+        <span class="btns">
+          <button id="bTtsTest">Tes</button>
+          <button id="bTtsSkip">Lewati</button>
+          <button id="bTtsClear">Hapus antrean</button>
+        </span>
+      </div>
+      <p class="hint">Agar penonton ikut mendengar, aktifkan Desktop Audio / audio sistem di TikTok LIVE Studio atau OBS.</p>
+
+      <p class="sec">⚙ Umum</p>
       <label class="row"><span>Selalu di atas aplikasi lain</span><input type="checkbox" data-k="alwaysOnTop"></label>
       <label class="row"><span>Klik-tembus (Ctrl+Shift+X untuk matikan)</span><input type="checkbox" data-k="clickThrough"></label>
       <label class="row"><span>Tampilkan "bergabung"</span><input type="checkbox" data-k="showJoin"></label>
@@ -74,6 +130,7 @@
     </aside>
 
   </div>
+  <script src="tts.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

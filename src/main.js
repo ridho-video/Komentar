@@ -7,7 +7,7 @@
 //  - Tanpa gambar/avatar, tanpa animasi, tanpa web font.
 //  - GPU dimatikan secara default (komposisi pakai CPU, tapi UI sangat ringan).
 
-import { app, BrowserWindow, ipcMain, globalShortcut, screen, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, globalShortcut, screen, Menu, net } from 'electron';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
@@ -33,6 +33,17 @@ const DEFAULTS = {
   autoReconnect: true,
   hardwareAcceleration: false,
   lowPriority: true,
+  // Suara komentar (TTS)
+  ttsEnabled: false,
+  ttsEngine: 'google', // 'google' (pilih bahasa, butuh internet) | 'system' (suara Windows, offline)
+  ttsLang: 'id',
+  ttsVoice: '', // nama suara Windows; kosong = otomatis mengikuti bahasa
+  ttsVolume: 1,
+  ttsRate: 1,
+  ttsReadName: false,
+  ttsMaxQueue: 5,
+  ttsMaxChars: 100,
+  ttsBlock: '', // kata yang tidak dibacakan, dipisah koma
 };
 
 const num = (v, lo, hi) => {
@@ -40,6 +51,8 @@ const num = (v, lo, hi) => {
   return Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : null;
 };
 const bool = (v) => (typeof v === 'boolean' ? v : null);
+const int = (lo, hi) => (v) => { const n = num(v, lo, hi); return n === null ? null : Math.round(n); };
+const LANG_RE = /^[a-z]{2,3}(?:-[A-Za-z]{2,4})?$/; // kode bahasa seperti id, ms, en, zh-CN
 
 // Setiap nilai dari jendela divalidasi dulu sebelum disimpan.
 const RULES = {
@@ -54,6 +67,16 @@ const RULES = {
   autoReconnect: bool,
   hardwareAcceleration: bool,
   lowPriority: bool,
+  ttsEnabled: bool,
+  ttsEngine: (v) => (v === 'google' || v === 'system' ? v : null),
+  ttsLang: (v) => (typeof v === 'string' && LANG_RE.test(v) ? v : null),
+  ttsVoice: (v) => (typeof v === 'string' ? v.slice(0, 120) : null),
+  ttsVolume: (v) => num(v, 0, 1),
+  ttsRate: (v) => num(v, 0.5, 2),
+  ttsReadName: bool,
+  ttsMaxQueue: int(1, 20),
+  ttsMaxChars: int(30, 160),
+  ttsBlock: (v) => (typeof v === 'string' ? v.slice(0, 300) : null),
 };
 
 const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
@@ -167,6 +190,7 @@ function createWindow() {
       spellcheck: false,
       devTools: !app.isPackaged,
       webSecurity: true,
+      autoplayPolicy: 'no-user-gesture-required', // suara TTS boleh diputar tanpa klik
     },
   });
 
@@ -649,6 +673,37 @@ async function startDemo() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Suara komentar (TTS Google)                                        */
+/*  Diunduh di proses utama supaya jendela overlay tetap tanpa akses   */
+/*  internet (CSP-nya tetap ketat).                                    */
+/* ------------------------------------------------------------------ */
+
+const TTS_TIMEOUT_MS = 6000;
+const TTS_MAX_BYTES = 500 * 1024;
+const TTS_MAX_PARALLEL = 3;
+const TTS_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
+let ttsRunning = 0;
+
+async function fetchTts(text, lang) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TTS_TIMEOUT_MS);
+  try {
+    const url = 'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob'
+      + `&tl=${encodeURIComponent(lang)}&q=${encodeURIComponent(text)}`;
+    const res = await net.fetch(url, { headers: { 'User-Agent': TTS_UA }, signal: ctrl.signal });
+    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+    if (!/audio/i.test(res.headers.get('content-type') || '')) return { ok: false, error: 'Bukan audio' };
+    const buf = await res.arrayBuffer();
+    if (!buf.byteLength || buf.byteLength > TTS_MAX_BYTES) return { ok: false, error: 'Ukuran audio tidak wajar' };
+    return { ok: true, data: new Uint8Array(buf) };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err).slice(0, 80) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  IPC (hanya diterima dari jendela overlay sendiri)                  */
 /* ------------------------------------------------------------------ */
 
@@ -686,6 +741,19 @@ ipcMain.handle('demo', async (e) => {
   if (!fromUs(e)) return { ok: false };
   await startDemo();
   return { ok: true };
+});
+
+ipcMain.handle('tts:fetch', async (e, text, lang) => {
+  if (!fromUs(e)) return { ok: false };
+  const line = typeof text === 'string' ? text.trim().slice(0, 200) : '';
+  if (!line || typeof lang !== 'string' || !LANG_RE.test(lang)) return { ok: false, error: 'Data tidak valid' };
+  if (ttsRunning >= TTS_MAX_PARALLEL) return { ok: false, error: 'Sibuk' };
+  ttsRunning++;
+  try {
+    return await fetchTts(line, lang);
+  } finally {
+    ttsRunning--;
+  }
 });
 
 ipcMain.on('settings:set', (e, patch) => { if (fromUs(e)) applyPatch(patch); });
