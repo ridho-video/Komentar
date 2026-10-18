@@ -315,6 +315,7 @@ let wantConnected = false;
 let retryTimer = null;
 let retryCount = 0;
 let session = 0; // naik tiap percobaan: callback lama diabaikan
+let chatMiss = false; // ada event chat tapi teksnya tidak terbaca
 let eventCount = 0; // jumlah event yang benar-benar diterima dari TikTok (untuk diagnosis)
 let liveSince = 0;
 let watchTimer = null;
@@ -356,6 +357,7 @@ function startWatch(user) {
   stopWatch();
   liveSince = Date.now();
   eventCount = 0;
+  chatMiss = false;
   for (const k of Object.keys(seenKeys)) delete seenKeys[k];
   watchTimer = setInterval(() => {
     if (lastStatus.state !== 'live') return;
@@ -363,7 +365,7 @@ function startWatch(user) {
       sendStatus('live', `Terhubung ke @${user}, tapi TikTok belum mengirim data. Pastikan LIVE sedang berjalan & publik, atau isi API key di ⚙.`);
     } else {
       let text = `Terhubung ke @${user} · ${eventCount} event diterima`;
-      const missing = stats.viewers === null || !stats.likes;
+      const missing = stats.viewers === null || !stats.likes || chatMiss;
       if (missing && Date.now() - liveSince > 20000) {
         const parts = Object.entries(seenKeys).map(([k, v]) => `${k}[${v}]`);
         if (parts.length) text += ` · field: ${parts.join(' ')}`;
@@ -452,8 +454,14 @@ function wire(c, my) {
   const on = (name, fn) => c.on(name, (d) => { eventCount++; fn(d); });
 
   on(E.CHAT, (d) => {
-    if (!d || !d.comment) return;
-    pendingChat.push({ n: nick(d.user), m: String(d.comment).slice(0, 200) });
+    // Nama field teks komentar bisa berbeda antar versi library: comment / content.
+    const text = d?.comment ?? d?.content ?? d?.text ?? d?.message;
+    if (!text) {
+      peek('chat', d); // tidak ada teks: simpan nama field asli untuk petunjuk di status
+      chatMiss = true;
+      return;
+    }
+    pendingChat.push({ n: nick(d.user), m: String(text).slice(0, 200) });
     if (pendingChat.length > 60) pendingChat.splice(0, pendingChat.length - 60);
     kick();
   });
@@ -485,20 +493,21 @@ function wire(c, my) {
   });
 
   on(E.GIFT, (d) => {
-    const det = d?.giftDetails || {};
-    const streakable = det.giftType === 1;
+    const det = d?.giftDetails || d?.gift || {};
+    const gType = det.giftType ?? det.type;
+    const streakable = gType === 1;
     const final = !streakable || !!d.repeatEnd; // gift beruntun: hitung hanya saat streak selesai
     const count = Number(d?.repeatCount) || 1;
     const who = nick(d?.user);
     const key = `${String(d?.user?.userId ?? d?.user?.uniqueId ?? who)}|${String(d?.giftId)}`;
     if (final) {
-      stats.diamonds += (Number(det.diamondCount) || 0) * count;
+      stats.diamonds += (Number(det.diamondCount ?? det.diamond_count) || 0) * count;
       statsDirty = true;
     }
     pendingGifts.set(key, {
       k: key,
       n: who,
-      g: String(det.giftName || `Gift #${d?.giftId}`).slice(0, 30),
+      g: String(det.giftName || det.name || `Gift #${d?.giftId}`).slice(0, 30),
       c: count,
       e: final ? 1 : 0,
     });
