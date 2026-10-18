@@ -315,7 +315,7 @@ let wantConnected = false;
 let retryTimer = null;
 let retryCount = 0;
 let session = 0; // naik tiap percobaan: callback lama diabaikan
-let chatMiss = false; // ada event chat tapi teksnya tidak terbaca
+let fieldMiss = false; // ada event (chat/gift/follow/share) yang field pentingnya tidak terbaca
 let eventCount = 0; // jumlah event yang benar-benar diterima dari TikTok (untuk diagnosis)
 let liveSince = 0;
 let watchTimer = null;
@@ -357,21 +357,19 @@ function startWatch(user) {
   stopWatch();
   liveSince = Date.now();
   eventCount = 0;
-  chatMiss = false;
+  fieldMiss = false;
   for (const k of Object.keys(seenKeys)) delete seenKeys[k];
   watchTimer = setInterval(() => {
     if (lastStatus.state !== 'live') return;
+    let text = `Terhubung ke @${user}`;
     if (eventCount === 0 && Date.now() - liveSince > 25000) {
-      sendStatus('live', `Terhubung ke @${user}, tapi TikTok belum mengirim data. Pastikan LIVE sedang berjalan & publik, atau isi API key di ⚙.`);
-    } else {
-      let text = `Terhubung ke @${user} · ${eventCount} event diterima`;
-      const missing = stats.viewers === null || !stats.likes || chatMiss;
-      if (missing && Date.now() - liveSince > 20000) {
-        const parts = Object.entries(seenKeys).map(([k, v]) => `${k}[${v}]`);
-        if (parts.length) text += ` · field: ${parts.join(' ')}`;
-      }
-      sendStatus('live', text);
+      text += ', tapi TikTok belum mengirim data. Pastikan LIVE sedang berjalan & publik, atau isi API key di ⚙.';
+    } else if (fieldMiss && Date.now() - liveSince > 20000) {
+      // Hanya muncul kalau ada data yang gagal dibaca (bukan pada pemakaian normal).
+      const parts = Object.entries(seenKeys).map(([k, v]) => `${k}[${v}]`);
+      if (parts.length) text += ` · field: ${parts.join(' ')}`;
     }
+    if (text !== lastStatus.text) sendStatus('live', text); // tidak kirim ulang kalau teks sama
   }, 5000);
 }
 
@@ -458,7 +456,7 @@ function wire(c, my) {
     const text = d?.comment ?? d?.content ?? d?.text ?? d?.message;
     if (!text) {
       peek('chat', d); // tidak ada teks: simpan nama field asli untuk petunjuk di status
-      chatMiss = true;
+      fieldMiss = true;
       return;
     }
     pendingChat.push({ n: nick(d.user), m: String(text).slice(0, 200) });
@@ -494,6 +492,10 @@ function wire(c, my) {
 
   on(E.GIFT, (d) => {
     const det = d?.giftDetails || d?.gift || {};
+    if (!(det.giftName || det.name) || !(det.diamondCount ?? det.diamond_count)) {
+      peek('gift', d); // nama/harga gift tidak terbaca: simpan nama field asli untuk petunjuk
+      fieldMiss = true;
+    }
     const gType = det.giftType ?? det.type;
     const streakable = gType === 1;
     const final = !streakable || !!d.repeatEnd; // gift beruntun: hitung hanya saat streak selesai
@@ -514,8 +516,16 @@ function wire(c, my) {
     kick();
   });
 
-  on(E.FOLLOW, (d) => { pendingEvents.push({ k: 'f', n: nick(d?.user) }); kick(); });
-  on(E.SHARE, (d) => { pendingEvents.push({ k: 's', n: nick(d?.user) }); kick(); });
+  on(E.FOLLOW, (d) => {
+    if (!d?.user) { peek('follow', d); fieldMiss = true; }
+    pendingEvents.push({ k: 'f', n: nick(d?.user) });
+    kick();
+  });
+  on(E.SHARE, (d) => {
+    if (!d?.user) { peek('share', d); fieldMiss = true; }
+    pendingEvents.push({ k: 's', n: nick(d?.user) });
+    kick();
+  });
 
   c.on(E.STREAM_END, () => {
     if (my !== session) return;
@@ -554,7 +564,7 @@ async function connectNow() {
     if (my !== session) return;
 
     retryCount = 0;
-    sendStatus('live', `Terhubung ke @${user} · menunggu data…`);
+    sendStatus('live', `Terhubung ke @${user}`);
     applyRoomInfo(state?.roomInfo);
     startWatch(user);
   } catch (err) {
