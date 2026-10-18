@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'">
+  <title>TikTok Live Overlay Lite</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+
+    <header id="bar">
+      <span id="dot" class="dot idle"></span>
+      <span id="title">TikTok Live</span>
+      <span class="grow"></span>
+      <button id="bGear" title="Pengaturan">⚙</button>
+      <button id="bPin" title="Selalu di atas" class="on">📌</button>
+      <button id="bGhost" title="Klik-tembus (matikan: Ctrl+Shift+X)">🖱</button>
+      <button id="bMin" title="Kecilkan">–</button>
+      <button id="bClose" title="Tutup">✕</button>
+    </header>
+
+    <section id="stats">
+      <span class="chip" title="Penonton sekarang">👁 <b id="sV">—</b></span>
+      <span class="chip" title="Total like">❤ <b id="sL">—</b></span>
+      <span class="chip" title="Total diamond dari gift">💎 <b id="sD">0</b></span>
+    </section>
+
+    <div id="top"></div>
+
+    <form id="connect" autocomplete="off">
+      <input id="user" type="text" placeholder="username / link LIVE" maxlength="80" spellcheck="false">
+      <button id="bGo" type="submit">Hubungkan</button>
+    </form>
+    <div id="status">Masukkan username lalu klik Hubungkan.</div>
+
+    <div id="gifts"></div>
+    <div id="chat"></div>
+    <div id="join"></div>
+
+    <div id="grip" title="Tarik untuk ubah ukuran"></div>
+
+    <aside id="settings">
+      <div class="row"><span>Ukuran</span>
+        <span class="btns">
+          <button data-preset="small">Kecil</button>
+          <button data-preset="medium">Sedang</button>
+          <button data-preset="large">Besar</button>
+        </span>
+      </div>
+      <label class="col"><span>Transparansi latar</span>
+        <input type="range" min="0.15" max="1" step="0.05" data-k="bgAlpha"></label>
+      <label class="col"><span>Ukuran teks</span>
+        <input type="range" min="10" max="22" step="1" data-k="fontSize"></label>
+      <label class="col"><span>Maks. baris komentar (lebih sedikit = lebih ringan)</span>
+        <input type="range" min="10" max="80" step="5" data-k="maxLines"></label>
+
+      <label class="row"><span>Selalu di atas aplikasi lain</span><input type="checkbox" data-k="alwaysOnTop"></label>
+      <label class="row"><span>Klik-tembus (Ctrl+Shift+X untuk matikan)</span><input type="checkbox" data-k="clickThrough"></label>
+      <label class="row"><span>Tampilkan "bergabung"</span><input type="checkbox" data-k="showJoin"></label>
+      <label class="row"><span>Sambung ulang otomatis</span><input type="checkbox" data-k="autoReconnect"></label>
+      <label class="row"><span>Prioritas rendah (hemat CPU)</span><input type="checkbox" data-k="lowPriority"></label>
+      <label class="row"><span>Pakai GPU (default mati, butuh restart)</span><input type="checkbox" data-k="hardwareAcceleration"></label>
+
+      <label class="col"><span>API key Euler Stream (opsional)</span>
+        <input type="password" data-k="apiKey" placeholder="kosongkan jika tidak punya" spellcheck="false"></label>
+
+      <div id="restartNote">Perubahan ini butuh mulai ulang. <button id="bRestart">Mulai ulang sekarang</button></div>
+
+      <div class="row"><span>Coba tampilan tanpa LIVE</span><button id="bDemo">Mode demo</button></div>
+      <p class="hint">Ctrl+Shift+X klik-tembus · Ctrl+Shift+H sembunyikan/tampilkan</p>
+    </aside>
+
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>

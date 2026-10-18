@@ -1,0 +1,174 @@
+/* Sengaja sederhana: tanpa blur, bayangan, animasi, atau web font supaya CPU/GPU tetap kecil. */
+
+:root { --a: .75; --fs: 13px; }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font: var(--fs) / 1.35 "Segoe UI", system-ui, sans-serif;
+  color: #f3f3f6;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+#app {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: rgba(12, 12, 18, var(--a));
+  border: 1px solid rgba(255, 255, 255, .10);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* ---------- Title bar ---------- */
+#bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 4px 0 10px;
+  background: rgba(0, 0, 0, .30);
+  -webkit-app-region: drag;
+  flex: none;
+}
+#title { font-weight: 600; font-size: .92em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grow { flex: 1; }
+#bar button {
+  -webkit-app-region: no-drag;
+  width: 24px; height: 22px;
+  border: 0; border-radius: 5px;
+  background: transparent; color: #f3f3f6;
+  font-size: 12px; line-height: 1;
+  cursor: pointer; opacity: .55;
+}
+#bar button:hover { background: rgba(255, 255, 255, .14); opacity: 1; }
+#bar button.on { opacity: 1; }
+#bClose:hover { background: #d92d4a !important; }
+
+.dot { width: 9px; height: 9px; border-radius: 50%; background: #777; flex: none; }
+.dot.connecting, .dot.retry, .dot.wait { background: #f2b01e; }
+.dot.live { background: #2ecc71; }
+.dot.demo { background: #4da3ff; }
+.dot.error, .dot.ended { background: #e5484d; }
+
+/* ---------- Statistik ---------- */
+#stats { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px 2px; flex: none; }
+.chip {
+  padding: 1px 9px;
+  background: rgba(255, 255, 255, .09);
+  border-radius: 10px;
+  font-size: .92em;
+  white-space: nowrap;
+}
+.chip b { font-weight: 700; }
+
+#top { display: none; padding: 2px 10px 0; font-size: .85em; color: #ffd36b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
+#top.on { display: block; }
+
+/* ---------- Form hubungkan ---------- */
+#connect { display: flex; gap: 6px; padding: 6px 8px 0; flex: none; }
+#connect input {
+  flex: 1; min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, .35);
+  color: #fff; font: inherit;
+  user-select: text; -webkit-user-select: text;
+}
+#connect input:disabled { opacity: .6; }
+#connect button, #settings button {
+  padding: 3px 10px;
+  border: 0; border-radius: 6px;
+  background: #fe2c55; color: #fff;
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+#connect button.off { background: #4a4a55; }
+
+#status { padding: 3px 10px 4px; font-size: .82em; opacity: .75; flex: none; }
+
+/* ---------- Gift ---------- */
+#gifts { flex: none; padding: 0 8px; }
+.g {
+  margin: 2px 0;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(254, 44, 85, .88);
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.g.live { background: rgba(240, 140, 0, .92); }
+
+/* ---------- Komentar: yang terbaru di bawah, yang lama terpotong di atas ---------- */
+#chat {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  padding: 4px 10px;
+  overflow: hidden;
+  contain: layout paint;
+}
+.m { padding: 2px 0; overflow-wrap: anywhere; }
+.u { font-weight: 700; }
+.c0 { color: #ff7a90; } .c1 { color: #ffb347; } .c2 { color: #ffe066; } .c3 { color: #7ee787; }
+.c4 { color: #5ee0d0; } .c5 { color: #6cb6ff; } .c6 { color: #b794f6; } .c7 { color: #f783c5; }
+.ev { font-size: .9em; opacity: .9; }
+.ev.f { color: #7ee787; }
+.ev.s { color: #6cb6ff; }
+
+/* Ruang tetap supaya layout tidak loncat saat ticker muncul/hilang. */
+#join {
+  flex: none;
+  min-height: 1.7em;
+  padding: 2px 10px 4px;
+  font-size: .85em;
+  opacity: .85;
+  visibility: hidden;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#join.on { visibility: visible; }
+
+/* ---------- Pegangan ubah ukuran ---------- */
+#grip {
+  position: absolute; right: 0; bottom: 0;
+  width: 16px; height: 16px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, .35) 50%);
+}
+
+/* ---------- Pengaturan ---------- */
+#settings {
+  display: none;
+  position: absolute; top: 30px; left: 0; right: 0; bottom: 0;
+  padding: 8px 12px 14px;
+  background: rgb(10, 10, 16);
+  overflow-y: auto;
+  z-index: 5;
+}
+#settings.on { display: block; }
+#settings .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 7px 0; }
+#settings .col { display: block; margin: 8px 0; }
+#settings .col span { display: block; margin-bottom: 3px; font-size: .9em; opacity: .85; }
+#settings input[type=range] { width: 100%; }
+#settings input[type=password] {
+  width: 100%; padding: 4px 8px; border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: rgba(255, 255, 255, .06); color: #fff; font: inherit;
+  user-select: text; -webkit-user-select: text;
+}
+#settings .btns { display: flex; gap: 4px; }
+#settings .btns button { background: #3a3a46; }
+#settings .hint { margin-top: 10px; font-size: .8em; opacity: .6; }
+#restartNote { display: none; margin: 8px 0; padding: 6px 8px; border-radius: 6px; background: rgba(242, 176, 30, .16); font-size: .88em; }
+#restartNote.on { display: block; }
+#restartNote button { margin-left: 6px; }
+
+/* ---------- Mode klik-tembus ---------- */
+body.ghost #bar { opacity: .5; }
+body.ghost #grip, body.ghost #settings, body.ghost #connect { display: none; }

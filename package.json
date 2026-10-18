@@ -1,0 +1,73 @@
+{
+  "name": "tiktok-live-overlay-lite",
+  "productName": "TikTok Live Overlay Lite",
+  "version": "1.0.0",
+  "description": "Overlay komentar, gift, like, dan jumlah penonton TikTok LIVE yang super ringan untuk laptop spek rendah.",
+  "author": "TikTok Live Overlay Lite",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "demo": "electron . --demo",
+    "dist": "electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "tiktok-live-connector": "2.5.0"
+  },
+  "devDependencies": {
+    "electron": "^44.9.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.tiktoklive.overlaylite",
+    "productName": "TikTok Live Overlay Lite",
+    "copyright": "MIT License",
+    "asar": true,
+    "compression": "maximum",
+    "electronLanguages": [
+      "en-US"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "!**/node_modules/**/*.{map,md,d.ts,d.mts,d.cts}",
+      "!**/node_modules/**/{test,tests,__tests__,example,examples,docs,.github}/**"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false,
+      "buildUniversalInstaller": false,
+      "artifactName": "TikTok-Live-Overlay-Lite-Setup-${version}-${arch}.${ext}"
+    },
+    "portable": {
+      "artifactName": "TikTok-Live-Overlay-Lite-Portable-${version}-x64.${ext}"
+    }
+  }
+}
