@@ -315,6 +315,9 @@ let wantConnected = false;
 let retryTimer = null;
 let retryCount = 0;
 let session = 0; // naik tiap percobaan: callback lama diabaikan
+let eventCount = 0; // jumlah event yang benar-benar diterima dari TikTok (untuk diagnosis)
+let liveSince = 0;
+let watchTimer = null;
 
 const RETRY_LADDER = [5000, 10000, 20000, 40000, 80000, 120000];
 
@@ -326,7 +329,28 @@ function parseUsername(raw) {
   return /^[A-Za-z0-9._]{1,40}$/.test(s) ? s : null;
 }
 
+function stopWatch() {
+  clearInterval(watchTimer);
+  watchTimer = null;
+}
+
+// Tiap 5 dtk, tampilkan jumlah event yang diterima. Kalau lama tidak ada data, beri petunjuk.
+function startWatch(user) {
+  stopWatch();
+  liveSince = Date.now();
+  eventCount = 0;
+  watchTimer = setInterval(() => {
+    if (lastStatus.state !== 'live') return;
+    if (eventCount === 0 && Date.now() - liveSince > 25000) {
+      sendStatus('live', `Terhubung ke @${user}, tapi TikTok belum mengirim data. Pastikan LIVE sedang berjalan & publik, atau isi API key di ⚙.`);
+    } else {
+      sendStatus('live', `Terhubung ke @${user} · ${eventCount} event diterima`);
+    }
+  }, 5000);
+}
+
 async function teardown() {
+  stopWatch();
   const c = conn;
   conn = null;
   if (!c) return;
@@ -384,25 +408,38 @@ function handleFail(err) {
   retryTimer = setTimeout(connectNow, delay);
 }
 
+// Isi awal penonton & like dari data ruangan saat baru terhubung (sebelum event pertama datang).
+function applyRoomInfo(info) {
+  if (!info || typeof info !== 'object') return;
+  const st = info.stats && typeof info.stats === 'object' ? info.stats : {};
+  const v = Number(info.user_count ?? info.userCount ?? st.user_count ?? st.total_user);
+  const l = Number(st.like_count ?? st.likeCount ?? info.like_count);
+  if (stats.viewers === null && Number.isFinite(v) && v > 0) { stats.viewers = v; statsDirty = true; }
+  if (stats.likes === null && Number.isFinite(l) && l > 0) { stats.likes = l; statsDirty = true; }
+  if (statsDirty) kick();
+}
+
 function wire(c, my) {
   const E = lib.WebcastEvent;
   const C = lib.ControlEvent;
+  // Semua event pesan dihitung supaya kelihatan apakah TikTok benar-benar mengirim data.
+  const on = (name, fn) => c.on(name, (d) => { eventCount++; fn(d); });
 
-  c.on(E.CHAT, (d) => {
+  on(E.CHAT, (d) => {
     if (!d || !d.comment) return;
     pendingChat.push({ n: nick(d.user), m: String(d.comment).slice(0, 200) });
     if (pendingChat.length > 60) pendingChat.splice(0, pendingChat.length - 60);
     kick();
   });
 
-  c.on(E.MEMBER, (d) => {
+  on(E.MEMBER, (d) => {
     if (!settings.showJoin) return;
     joinLast = nick(d?.user);
     joinCount++;
     kick();
   });
 
-  c.on(E.LIKE, (d) => {
+  on(E.LIKE, (d) => {
     const total = Number(d?.totalLikeCount);
     const add = Number(d?.likeCount) || 0;
     stats.likes = total > 0 ? total : (stats.likes || 0) + add;
@@ -410,7 +447,7 @@ function wire(c, my) {
     kick();
   });
 
-  c.on(E.ROOM_USER, (d) => {
+  on(E.ROOM_USER, (d) => {
     const v = Number(d?.viewerCount);
     if (Number.isFinite(v)) stats.viewers = v;
     const ranks = Array.isArray(d?.ranksList) ? d.ranksList : [];
@@ -419,7 +456,7 @@ function wire(c, my) {
     kick();
   });
 
-  c.on(E.GIFT, (d) => {
+  on(E.GIFT, (d) => {
     const det = d?.giftDetails || {};
     const streakable = det.giftType === 1;
     const final = !streakable || !!d.repeatEnd; // gift beruntun: hitung hanya saat streak selesai
@@ -440,8 +477,8 @@ function wire(c, my) {
     kick();
   });
 
-  c.on(E.FOLLOW, (d) => { pendingEvents.push({ k: 'f', n: nick(d?.user) }); kick(); });
-  c.on(E.SHARE, (d) => { pendingEvents.push({ k: 's', n: nick(d?.user) }); kick(); });
+  on(E.FOLLOW, (d) => { pendingEvents.push({ k: 'f', n: nick(d?.user) }); kick(); });
+  on(E.SHARE, (d) => { pendingEvents.push({ k: 's', n: nick(d?.user) }); kick(); });
 
   c.on(E.STREAM_END, () => {
     if (my !== session) return;
@@ -476,11 +513,13 @@ async function connectNow() {
     const c = new lib.TikTokLiveConnection(user, options);
     conn = c;
     wire(c, my);
-    await c.connect();
+    const state = await c.connect();
     if (my !== session) return;
 
     retryCount = 0;
-    sendStatus('live', `Terhubung ke @${user}`);
+    sendStatus('live', `Terhubung ke @${user} · menunggu data…`);
+    applyRoomInfo(state?.roomInfo);
+    startWatch(user);
   } catch (err) {
     if (my !== session) return;
     handleFail(err);
